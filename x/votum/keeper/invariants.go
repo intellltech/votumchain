@@ -1,10 +1,12 @@
-package votum
+package keeper
+
+// DONTCOVER
 
 import (
 	"fmt"
 
+	"github.com/EG-easy/votumchain/x/votum/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/gov/types"
 )
 
 // RegisterInvariants registers all governance invariants
@@ -26,7 +28,7 @@ func ModuleAccountInvariant(keeper Keeper) sdk.Invariant {
 		var expectedDeposits sdk.Coins
 
 		keeper.IterateAllDeposits(ctx, func(deposit types.Deposit) bool {
-			expectedDeposits = expectedDeposits.Add(deposit.Amount)
+			expectedDeposits = expectedDeposits.Add(deposit.Amount...)
 			return false
 		})
 

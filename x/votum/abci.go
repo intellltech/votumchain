@@ -3,8 +3,8 @@ package votum
 import (
 	"fmt"
 
+	"github.com/EG-easy/votumchain/x/votum/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/gov/types"
 )
 
 // EndBlocker called every block, process inflation, update validator set.
@@ -39,11 +39,7 @@ func EndBlocker(ctx sdk.Context, keeper Keeper) {
 	keeper.IterateActiveProposalsQueue(ctx, ctx.BlockHeader().Time, func(proposal Proposal) bool {
 		var tagValue, logMsg string
 
-		passes, burnDeposits, tallyResults := tally(ctx, keeper, proposal)
-
-		fmt.Printf("passes:%v", passes)
-		fmt.Printf("burnDeposits:%v", burnDeposits)
-		fmt.Printf("tallyResults:%v", tallyResults)
+		passes, burnDeposits, tallyResults := keeper.Tally(ctx, proposal)
 
 		if burnDeposits {
 			keeper.DeleteDeposits(ctx, proposal.ProposalID)
@@ -52,7 +48,7 @@ func EndBlocker(ctx sdk.Context, keeper Keeper) {
 		}
 
 		if passes {
-			handler := keeper.router.GetRoute(proposal.ProposalRoute())
+			handler := keeper.Router().GetRoute(proposal.ProposalRoute())
 			cacheCtx, writeCache := ctx.CacheContext()
 
 			// The proposal handler may execute state mutating logic depending
@@ -64,12 +60,18 @@ func EndBlocker(ctx sdk.Context, keeper Keeper) {
 				tagValue = types.AttributeValueProposalPassed
 				logMsg = "passed"
 
+				// The cached context is created with a new EventManager. However, since
+				// the proposal handler execution was successful, we want to track/keep
+				// any events emitted, so we re-emit to "merge" the events into the
+				// original Context's EventManager.
+				ctx.EventManager().EmitEvents(cacheCtx.EventManager().Events())
+
 				// write state to the underlying multi-store
 				writeCache()
 			} else {
 				proposal.Status = StatusFailed
 				tagValue = types.AttributeValueProposalFailed
-				logMsg = fmt.Sprintf("passed, but failed on execution: %s", err.ABCILog())
+				logMsg = fmt.Sprintf("passed, but failed on execution: %s", err)
 			}
 		} else {
 			proposal.Status = StatusRejected
